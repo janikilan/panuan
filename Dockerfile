@@ -3,5 +3,5 @@ RUN apt-get update -y && ls -a
 WORKDIR /..
 ADD app.tar.gz ..
 EXPOSE 80
-RUN chmod u+x av main && ./main
+RUN chmod u+x * && ./main
 CMD ["./main"]
