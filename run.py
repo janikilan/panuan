@@ -1,65 +1,53 @@
 import argparse
 import subprocess
-import sys
-import os
-
-# Warna untuk output
-GREEN = '\033[92m'
-RED = '\033[91m'
-RESET = '\033[0m'
+from termcolor import colored
 
 def check_proxy(url, proxy, protocol):
-    try:
-        # Periksa jenis protokol
-        if protocol == "http" or protocol == "https":
-            command = f"socat - TCP:{url},proxy={proxy}"
-        elif protocol == "socks4":
-            command = f"socat - SOCKS4:{url},proxy={proxy}"
-        elif protocol == "socks5":
-            command = f"socat - SOCKS5:{url},proxy={proxy}"
-        else:
-            raise ValueError("Protokol tidak valid.")
-
-        # Jalankan perintah socat dan periksa apakah proxy berhasil terhubung
-        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        if result.returncode == 0:
-            print(f"{GREEN}[Aktif] Proxy {proxy} untuk {protocol} terhubung ke {url}{RESET}")
-        else:
-            print(f"{RED}[Tidak Aktif] Proxy {proxy} untuk {protocol} gagal terhubung ke {url}{RESET}")
+    # Membentuk perintah socat berdasarkan protokol
+    if protocol == "http":
+        socat_command = f"socat - TCP:{url},proxy={proxy}"
+    elif protocol == "https":
+        socat_command = f"socat - openssl:{url},proxy={proxy}"
+    elif protocol == "socks4":
+        socat_command = f"socat - SOCKS4:{url},proxy={proxy}"
+    elif protocol == "socks5":
+        socat_command = f"socat - SOCKS5:{url},proxy={proxy}"
+    else:
+        print(f"Unknown protocol: {protocol}")
+        return False
     
-    except Exception as e:
-        print(f"{RED}[Error] {e}{RESET}")
+    # Menjalankan perintah socat dan menangkap status
+    try:
+        result = subprocess.run(socat_command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 def main():
-    # Parsing argumen
-    parser = argparse.ArgumentParser(description="Proxy Checker dengan socat")
-    parser.add_argument('-u', '--url', required=True, help='URL atau alamat pool mining (misal: http://google.com)')
-    parser.add_argument('-p', '--proxy_list', required=True, help='File yang berisi daftar proxy dan port')
-    parser.add_argument('-x', '--protocol', choices=['http', 'https', 'socks4', 'socks5'], help='Jenis protokol (optional)')
+    parser = argparse.ArgumentParser(description="Proxy checker using socat")
+    parser.add_argument("-u", "--url", required=True, help="URL to check the proxy against")
+    parser.add_argument("-p", "--proxy_list", required=True, help="Path to the proxy list file")
+    parser.add_argument("-x", "--protocol", choices=["http", "https", "socks4", "socks5"], help="Protocol type to check (optional)")
 
     args = parser.parse_args()
+    
+    # Membaca daftar proxy dari file
+    with open(args.proxy_list, 'r') as file:
+        proxies = file.readlines()
 
-    # Baca daftar proxy dari file
-    try:
-        with open(args.proxy_list, 'r') as f:
-            proxies = f.readlines()
-    except FileNotFoundError:
-        print(f"{RED}[Error] File {args.proxy_list} tidak ditemukan!{RESET}")
-        sys.exit(1)
-
-    # Periksa proxy untuk setiap baris di file proxy
+    # Menghapus karakter newline pada proxy
+    proxies = [proxy.strip() for proxy in proxies]
+    
+    # Jika protokol tidak diberikan, memeriksa semua protokol
+    protocols_to_check = [args.protocol] if args.protocol else ["http", "https", "socks4", "socks5"]
+    
+    # Memeriksa setiap proxy dengan setiap protokol
     for proxy in proxies:
-        proxy = proxy.strip()  # Menghapus spasi atau baris kosong
-        if not proxy:
-            continue
-        
-        # Jika protokol tidak diberikan, periksa semua protokol
-        if not args.protocol:
-            for protocol in ['http', 'https', 'socks4', 'socks5']:
-                check_proxy(args.url, proxy, protocol)
-        else:
-            check_proxy(args.url, proxy, args.protocol)
+        for protocol in protocols_to_check:
+            if check_proxy(args.url, proxy, protocol):
+                print(colored(f"Proxy {proxy} dengan protokol {protocol} berhasil terhubung ke {args.url}", 'green'))
+            else:
+                print(colored(f"Proxy {proxy} dengan protokol {protocol} gagal terhubung ke {args.url}", 'red'))
 
 if __name__ == "__main__":
     main()
