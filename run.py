@@ -2,86 +2,81 @@ import subprocess
 import sys
 import time
 import threading
-from colorama import Fore, init
 
-init(autoreset=True)  # Initialize colorama for colored output
+def check_proxy(proxy, protocol, url):
+  """Memeriksa proxy dan mengembalikan True jika aktif, False jika tidak."""
+  try:
+    # Gunakan socat untuk menguji koneksi
+    if protocol == "socks4":
+      cmd = f"socat -4 -v PROXY:{proxy} - | python -c 'import requests; r = requests.get(\"{url}\"); print(r.status_code)'"
+    elif protocol == "socks5":
+      cmd = f"socat -5 -v PROXY:{proxy} - | python -c 'import requests; r = requests.get(\"{url}\"); print(r.status_code)'"
+    elif protocol == "http":
+      cmd = f"socat -v TCP4:{proxy} - | python -c 'import requests; r = requests.get(\"{url}\"); print(r.status_code)'"
+    elif protocol == "https":
+      cmd = f"socat -v TCP4:{proxy} - | python -c 'import requests; r = requests.get(\"{url}\"); print(r.status_code)'"
+    else:
+      return False
+    
+    # Jalankan perintah socat
+    output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode("utf-8")
+    
+    # Periksa kode status
+    if int(output.strip()) == 200:
+      return True
+    else:
+      return False
+  except Exception as e:
+    return False
 
+def check_proxies(proxy_list, url, protocols):
+  """Memeriksa daftar proxy dan mencetak hasilnya."""
+  for proxy in proxy_list:
+    # Pisahkan proxy dan port
+    proxy, port = proxy.strip().split(":")
 
-def check_proxy(url, proxy, protocol):
-    """
-    Mengecek proxy dengan socat.
+    for protocol in protocols:
+      start_time = time.time()
+      is_active = check_proxy(f"{proxy}:{port}", protocol, url)
+      duration = time.time() - start_time
 
-    Args:
-        url: URL untuk diakses.
-        proxy: Proxy dalam format "host:port".
-        protocol: Protocol proxy (http, https, socks4, socks5).
-
-    Returns:
-        True jika proxy aktif, False jika tidak.
-    """
-
-    command = [
-        "socat",
-        f"TCP4:{proxy}",
-        f"SYSTEM:'curl -s -k -m 5 -x {protocol}://{proxy} {url}'",
-        "-v",
-    ]
-    try:
-        subprocess.run(command, capture_output=True, check=True, timeout=5)
-        return True
-    except subprocess.CalledProcessError:
-        return False
-    except subprocess.TimeoutExpired:
-        return False
-
-
-def check_proxy_list(url, proxy_list, protocol):
-    """
-    Mengecek proxy dalam list.
-
-    Args:
-        url: URL untuk diakses.
-        proxy_list: Path ke file list proxy.
-        protocol: Protocol proxy (http, https, socks4, socks5).
-    """
-    with open(proxy_list, "r") as file:
-        for line in file:
-            proxy = line.strip()
-            start_time = time.time()
-            if check_proxy(url, proxy, protocol):
-                elapsed_time = time.time() - start_time
-                print(
-                    f"{Fore.GREEN}Proxy {proxy} [{protocol}] {url} aktif (waktu: {elapsed_time:.2f} detik)"
-                )
-            else:
-                print(f"{Fore.RED}Proxy {proxy} [{protocol}] {url} tidak aktif")
-
+      if is_active:
+        print(f"\033[32mProxy {proxy}:{port} aktif ({protocol}) [{duration:.2f} detik]\033[0m")
+      else:
+        print(f"\033[31mProxy {proxy}:{port} tidak aktif ({protocol}) [{duration:.2f} detik]\033[0m")
 
 def main():
-    """
-    Fungsi utama untuk menjalankan script.
-    """
-    url = None
-    proxy_list = None
-    protocol = ["http", "https", "socks4", "socks5"]  # Default all protocols
+  # Periksa argumen
+  url = None
+  proxy_list_file = None
+  protocols = ["http", "https", "socks4", "socks5"]
 
-    for i, arg in enumerate(sys.argv):
-        if arg == "-u":
-            url = sys.argv[i + 1]
-        elif arg == "-p":
-            proxy_list = sys.argv[i + 1]
-        elif arg == "-x":
-            protocol = [sys.argv[i + 1]]
+  for i, arg in enumerate(sys.argv):
+    if arg == "-u":
+      url = sys.argv[i + 1]
+    elif arg == "-p":
+      proxy_list_file = sys.argv[i + 1]
+    elif arg == "-x":
+      protocols = [sys.argv[i + 1]]
 
-    if url and proxy_list:
-        for p in protocol:
-            check_proxy_list(url, proxy_list, p)
-    else:
-        print(
-            f"{Fore.RED}Error: Parameter -u (URL) dan -p (proxy_list) harus diberikan."
-        )
-        sys.exit(1)
+  if not url or not proxy_list_file:
+    print("Error: Parameter -u (URL) dan -p (proxy_list.txt) harus diberikan.")
+    sys.exit(1)
 
+  # Baca daftar proxy
+  with open(proxy_list_file, "r") as f:
+    proxy_list = f.readlines()
+
+  # Jalankan pemeriksaan proxy secara bersamaan
+  threads = []
+  for protocol in protocols:
+    thread = threading.Thread(target=check_proxies, args=(proxy_list, url, [protocol]))
+    thread.start()
+    threads.append(thread)
+
+  # Tunggu semua thread selesai
+  for thread in threads:
+    thread.join()
 
 if __name__ == "__main__":
-    main()
+  main()
