@@ -10,6 +10,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /root
 COPY . .
-RUN ls -a
+RUN chmod u+x *
 
 
