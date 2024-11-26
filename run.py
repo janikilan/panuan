@@ -1,57 +1,58 @@
-import socket
 import argparse
-import socks
+import socket
+import requests
+from time import sleep
+from termcolor import colored
 
-def check_proxy(proxy_ip, proxy_port, pool_ip, pool_port, protocol):
+# Fungsi untuk mengecek proxy
+def check_proxy(protocol, proxy, url):
     try:
-        if protocol in ['http', 'https']:
-            # HTTP/HTTPS proxy
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            sock.connect((proxy_ip, proxy_port))
-            sock.sendall(f'CONNECT {pool_ip}:{pool_port} HTTP/1.1\r\nHost: {pool_ip}:{pool_port}\r\n\r\n'.encode('utf-8'))
-            response = sock.recv(1024)
-            if b"200 Connection established" in response:
-                print(f"Proxy {proxy_ip}:{proxy_port} berhasil terhubung ke pool {pool_ip}:{pool_port}.")
-            else:
-                print(f"Proxy {proxy_ip}:{proxy_port} gagal terhubung: {response.decode('utf-8')}")
-        elif protocol in ['socks4', 'socks5']:
-            # SOCKS proxy
-            socks.set_default_proxy(getattr(socks, protocol.upper()), proxy_ip, proxy_port)
-            sock = socks.socksocket()
-            sock.settimeout(1)
-            sock.connect((pool_ip, pool_port))
-            sock.sendall(f'{"{"} "method": "mining.authorize", "params": ["username", "password"], "id": 1 {"}"}\n'.encode('utf-8'))
-            response = sock.recv(1024)
-            print(f"Proxy {proxy_ip}:{proxy_port} berhasil terhubung ke pool {pool_ip}:{pool_port}. Respon: {response.decode('utf-8')}")
+        proxies = {protocol: f"{protocol}://{proxy}"}
+        if protocol.startswith("socks"):
+            import socks
+            import socket
+
+            protocol_type = socks.SOCKS5 if protocol == "socks5" else socks.SOCKS4
+            ip, port = proxy.split(":")
+            socks.set_default_proxy(protocol_type, ip, int(port))
+            socket.socket = socks.socksocket
+
+        # Menggunakan requests untuk mengakses URL dengan proxy
+        response = requests.get(url, proxies=proxies, timeout=1)
+        if response.status_code == 200:
+            print(colored(f"Proxy aktif: {proxy}", "green"))
         else:
-            print("Protokol tidak dikenali.")
-    except (socket.timeout, socket.error) as e:
-        print(f"Proxy {proxy_ip}:{proxy_port} tidak dapat terhubung: {e}")
-    finally:
-        sock.close()
+            pass  # Abaikan output lainnya
 
-def main():
-    parser = argparse.ArgumentParser(description='Proxy Checker untuk Stratum+TCP.')
-    parser.add_argument('-u', '--url', required=True, help='URL pool mining (misal: pool.example.com:3333)')
-    parser.add_argument('-x', '--proxy_list', required=True, help='File yang berisi daftar proxy (satu per baris)')
-    parser.add_argument('-p', '--protocol', choices=['http', 'https', 'socks4', 'socks5'], required=True, help='Jenis protokol proxy')
-    
+    except Exception:
+        pass  # Abaikan error
+
+# Fungsi utama
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Proxy Checker untuk Mining Pool")
+    parser.add_argument("-u", required=True, help="URL Pool Mining")
+    parser.add_argument("-x", required=True, help="Nama file list proxy (txt)")
+    parser.add_argument("-p", required=True, help="Jenis protokol proxy (http, https, socks4, socks5)")
+
     args = parser.parse_args()
-    
-    # Mengambil informasi pool
-    pool_info = args.url.split(':')
-    pool_ip = pool_info[0]
-    pool_port = int(pool_info[1])  # Mengambil port dari URL pool
-    
-    # Membaca daftar proxy dari file
-    with open(args.proxy_list, 'r') as f:
-        proxies = [line.strip().split(':') for line in f.readlines()]
+    url = args.u
+    proxy_file = args.x
+    protocol = args.p.lower()
 
+    # Validasi protokol
+    if protocol not in ["http", "https", "socks4", "socks5"]:
+        print("Protokol tidak valid! Gunakan http, https, socks4, atau socks5.")
+        exit(1)
+
+    # Membaca file proxy
+    try:
+        with open(proxy_file, "r") as file:
+            proxies = [line.strip() for line in file.readlines()]
+    except FileNotFoundError:
+        print("File list proxy tidak ditemukan!")
+        exit(1)
+
+    # Mengecek setiap proxy
     for proxy in proxies:
-        if len(proxy) == 2:
-            proxy_ip, proxy_port = proxy
-            check_proxy(proxy_ip, int(proxy_port), pool_ip, pool_port, args.protocol)
-
-if __name__ == '__main__':
-    main()
+        check_proxy(protocol, proxy, url)
+        sleep(0.1)
