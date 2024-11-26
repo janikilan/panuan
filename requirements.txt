@@ -1,3 +1,4 @@
 colorama
 requests
-PySocks
+termcolor
+pysocks
