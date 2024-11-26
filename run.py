@@ -5,6 +5,10 @@ from termcolor import colored
 # Fungsi untuk mengecek proxy
 def check_proxy(protocol, proxy, url):
     try:
+        # Pastikan URL memiliki protokol yang sesuai
+        if not url.startswith(("http://", "https://")):
+            url = f"http://{url}"  # Tambahkan default protokol http
+
         proxies = {protocol: f"{protocol}://{proxy}"}
         
         # Menggunakan requests untuk mengakses URL dengan proxy
