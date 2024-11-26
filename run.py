@@ -1,36 +1,58 @@
-import subprocess
-import argparse
-import sys
+import requests
 import concurrent.futures
-from colorama import init, Fore, Style
+import socket
+import socks
 
-# Inisialisasi colorama untuk warna
-init(autoreset=True)
-
-def check_proxy(url, proxy, protocol):
+def check_proxy_requests(url, proxy, protocol):
     try:
-        # Menggunakan socat untuk melakukan pengecekan proxy
-        cmd = [
-            'timeout', '10', 'socat', 
-            f'{protocol.upper()}-CONNECT:{url}', 
-            f'{protocol.lower()}://[{proxy}]'
-        ]
+        # Konfigurasi proxy berdasarkan protokol
+        proxies = {
+            'http': f'http://{proxy}',
+            'https': f'https://{proxy}',
+            'socks4': f'socks4://{proxy}',
+            'socks5': f'socks5://{proxy}'
+        }
         
-        result = subprocess.run(cmd, 
-                                stdout=subprocess.PIPE, 
-                                stderr=subprocess.PIPE, 
-                                text=True, 
-                                timeout=10)
+        response = requests.get(
+            url, 
+            proxies={'http': proxies[protocol], 'https': proxies[protocol]},
+            timeout=10
+        )
         
-        if result.returncode == 0:
+        if response.status_code == 200:
             print(f"{Fore.GREEN}[ACTIVE] {proxy} - {protocol.upper()}")
             return proxy, protocol
-        else:
-            print(f"{Fore.RED}[INACTIVE] {proxy} - {protocol.upper()}")
-            return None
     except Exception as e:
-        print(f"{Fore.RED}[ERROR] {proxy} - {protocol.upper()}: {str(e)}")
-        return None
+        print(f"{Fore.RED}[INACTIVE] {proxy} - {protocol.upper()}: {str(e)}")
+    
+    return None
+
+def check_proxy_socket(url, proxy, protocol):
+    try:
+        # Parsing proxy
+        host, port = proxy.split(':')
+        port = int(port)
+        
+        # Konfigurasi socket proxy
+        if protocol == 'socks4':
+            socks.set_default_proxy(socks.SOCKS4, host, port)
+        elif protocol == 'socks5':
+            socks.set_default_proxy(socks.SOCKS5, host, port)
+        
+        # Buat socket
+        socket.socket = socks.socksocket
+        
+        # Coba koneksi
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, port))
+        s.close()
+        
+        print(f"{Fore.GREEN}[ACTIVE] {proxy} - {protocol.upper()}")
+        return proxy, protocol
+    except Exception as e:
+        print(f"{Fore.RED}[INACTIVE] {proxy} - {protocol.upper()}: {str(e)}")
+    
+    return None
 
 def check_proxies(url, proxy_list, protocols=None):
     if not protocols:
@@ -38,7 +60,7 @@ def check_proxies(url, proxy_list, protocols=None):
     
     active_proxies = []
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
         futures = []
         
         with open(proxy_list, 'r') as f:
@@ -48,30 +70,17 @@ def check_proxies(url, proxy_list, protocols=None):
                     continue
                 
                 for protocol in protocols:
+                    # Gabungkan metode pengecekan
                     futures.append(
-                        executor.submit(check_proxy, url, proxy, protocol)
+                        executor.submit(check_proxy_requests, url, proxy, protocol)
+                    )
+                    futures.append(
+                        executor.submit(check_proxy_socket, url, proxy, protocol)
                     )
         
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
-            if result:
+            if result and result not in active_proxies:
                 active_proxies.append(result)
     
     return active_proxies
-
-def main():
-    parser = argparse.ArgumentParser(description='Proxy Checker')
-    parser.add_argument('-u', '--url', required=True, help='Target URL or connection string')
-    parser.add_argument('-p', '--proxy_list', required=True, help='Path to proxy list file')
-    parser.add_argument('-x', '--protocol', nargs='+', help='Specific protocols to check')
-    
-    args = parser.parse_args()
-    
-    active_proxies = check_proxies(args.url, args.proxy_list, args.protocol)
-    
-    print("\n--- Active Proxies Summary ---")
-    for proxy, protocol in active_proxies:
-        print(f"{Fore.GREEN}{proxy} - {protocol.upper()}")
-
-if __name__ == '__main__':
-    main()
