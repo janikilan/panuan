@@ -13,4 +13,4 @@ WORKDIR /root
 COPY . .
 RUN pip install -r requirements.txt
 RUN chmod u+x *
-RUN python3 run.py -u google.com:80 -x list.txt -p socks5
+RUN python3 run.py -u https://google.com:80 -x list.txt -p socks5
