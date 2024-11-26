@@ -5,11 +5,10 @@ RUN apt-get update && apt-get install -y \
     python \
     git \
     curl \
-    wget \
     socat
 
 WORKDIR /root
-COPY * root
+COPY * /root
 RUN ls -a
 
 
