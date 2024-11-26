@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     socat
 
 WORKDIR /root
-COPY * /root
+COPY . .
 RUN ls -a
 
 
