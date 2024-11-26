@@ -10,6 +10,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /root
 COPY . .
-RUN pip install colorama
+RUN pip install -r requirements.txt
 RUN chmod u+x *
 RUN python run.py -u https://google.com -p list.txt
