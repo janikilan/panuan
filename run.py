@@ -7,7 +7,7 @@ def check_proxy(proxy_ip, proxy_port, pool_ip, pool_port, protocol):
         if protocol in ['http', 'https']:
             # HTTP/HTTPS proxy
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(1)
             sock.connect((proxy_ip, proxy_port))
             sock.sendall(f'CONNECT {pool_ip}:{pool_port} HTTP/1.1\r\nHost: {pool_ip}:{pool_port}\r\n\r\n'.encode('utf-8'))
             response = sock.recv(1024)
@@ -19,7 +19,7 @@ def check_proxy(proxy_ip, proxy_port, pool_ip, pool_port, protocol):
             # SOCKS proxy
             socks.set_default_proxy(getattr(socks, protocol.upper()), proxy_ip, proxy_port)
             sock = socks.socksocket()
-            sock.settimeout(5)
+            sock.settimeout(1)
             sock.connect((pool_ip, pool_port))
             sock.sendall(f'{"{"} "method": "mining.authorize", "params": ["username", "password"], "id": 1 {"}"}\n'.encode('utf-8'))
             response = sock.recv(1024)
