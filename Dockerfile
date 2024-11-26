@@ -1,6 +1,7 @@
 FROM ubuntu:20.04
 
 USER root
+#EXPOSE 80
 RUN apt-get update && apt-get install -y \
     python \
     git \
