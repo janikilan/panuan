@@ -1,31 +1,22 @@
 import argparse
-import socket
 import requests
-from time import sleep
 from termcolor import colored
 
 # Fungsi untuk mengecek proxy
 def check_proxy(protocol, proxy, url):
     try:
         proxies = {protocol: f"{protocol}://{proxy}"}
-        if protocol.startswith("socks"):
-            import socks
-            import socket
-
-            protocol_type = socks.SOCKS5 if protocol == "socks5" else socks.SOCKS4
-            ip, port = proxy.split(":")
-            socks.set_default_proxy(protocol_type, ip, int(port))
-            socket.socket = socks.socksocket
-
+        
         # Menggunakan requests untuk mengakses URL dengan proxy
         response = requests.get(url, proxies=proxies, timeout=1)
+        
         if response.status_code == 200:
             print(colored(f"Proxy aktif: {proxy}", "green"))
         else:
-            pass  # Abaikan output lainnya
+            print(colored(f"Proxy tidak aktif: {proxy}", "red"))
 
     except Exception:
-        pass  # Abaikan error
+        print(colored(f"Proxy tidak valid atau gagal: {proxy}", "red"))
 
 # Fungsi utama
 if __name__ == "__main__":
@@ -55,4 +46,3 @@ if __name__ == "__main__":
     # Mengecek setiap proxy
     for proxy in proxies:
         check_proxy(protocol, proxy, url)
-        sleep(0.1)
